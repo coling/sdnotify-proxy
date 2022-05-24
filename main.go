@@ -80,8 +80,16 @@ func forkExec(argv []string) (*os.Process, error) {
 }
 
 func main() {
-	if len(os.Args) < 3 {
-		fmt.Fprintf(os.Stderr, "Usage: %s proxy-socket cmd ...\n", os.Args[0])
+	reqd_args := 3
+	arg := 1
+	unset := false
+	if len(os.Args) > arg && os.Args[arg] == "--unset" {
+		unset = true
+		arg++
+		reqd_args++
+	}
+	if len(os.Args) < reqd_args {
+		fmt.Fprintf(os.Stderr, "Usage: %s [--unset] proxy-socket cmd ...\n", os.Args[0])
 		os.Exit(1)
 	}
 
@@ -91,13 +99,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	proxySock := os.Args[1]
+	proxySock := os.Args[arg]
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGCHLD)
 
-	// replace NOTIFY_SOCKET with the proxy socket
-	os.Setenv("NOTIFY_SOCKET", proxySock)
+	if unset {
+		// unset NOTIFY_SOCKET
+		os.Unsetenv("NOTIFY_SOCKET")
+	} else {
+		// replace NOTIFY_SOCKET with the proxy socket
+		os.Setenv("NOTIFY_SOCKET", proxySock)
+	}
 
 	proxy, err := newProxy(proxySock, sdSock)
 	if err != nil {
@@ -106,7 +119,7 @@ func main() {
 	}
 
 	// fork/exec
-	proc, err := forkExec(os.Args[2:len(os.Args)])
+	proc, err := forkExec(os.Args[arg+1:len(os.Args)])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error executing command: %v\n", err)
 		os.Exit(1)
